@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Cursos de Desenvolvimento de Software - Brasil</title>
+    <!-- Corrige href/rel -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        
+        #loading {
+                    position: absolute;
+                    top: 0; left: 0;
+                    width: 100%; height: 100%;
+                    background: rgba(255, 255, 255, 0.8);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    font-size: 24px;
+                    font-weight: bold;
+                    z-index: 999;
+                }
+
+        #map { height: 500px; margin-top: 20px; }
+        select { margin-right: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+
+        /* Estilo do pin agregado por UF (círculo com número) */
+        .uf-marker .uf-badge {
+            width: 36px;
+            height: 36px;
+            border-radius: 18px;
+            background: #1e88e5;
+            color: #fff;
+            border: 2px solid #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            box-shadow: 0 0 6px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <h1>Faculdades de Desenvolvimento de Software</h1>
+    <label for="uf">Estado (UF):</label>
+    <select id="uf"></select>
+
+    <label for="municipio">Município:</label>
+    <select id="municipio"></select>
+
+    <div id="map">
+    <div id="loading">Carregando 49.472 cursos... aguarde...</div>
+    </div>
+
+    <table id="tabela">
+        <thead>
+            <tr>
+                <th>Instituição</th>
+                <th>Curso</th>
+                <th>Modalidade</th>
+                <th>Município</th>
+                <th>UF</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <!-- Corrige fechamento das tags de script -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script>
+        let dados = [];
+        let mapa = L.map('map').setView([-14.2350, -51.9253], 4);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(mapa);
+
+        let marcadores = [];
+
+        // Coordenadas aproximadas por UF (capitais)
+        const UF_COORDS = {
+            AC: [-9.9754, -67.8243], AL: [-9.6498, -35.7089], AM: [-3.1190, -60.0217],
+            AP: [0.0349, -51.0694], BA: [-12.9777, -38.5016], CE: [-3.7167, -38.5426],
+            DF: [-15.7939, -47.8828], ES: [-20.3155, -40.3128], GO: [-16.6809, -49.2539],
+            MA: [-2.5307, -44.3068], MG: [-19.9167, -43.9345], MS: [-20.4697, -54.6201],
+            MT: [-15.6010, -56.0974], PA: [-1.4558, -48.4902], PB: [-7.1195, -34.8450],
+            PE: [-8.0476, -34.8770], PI: [-5.0919, -42.8034], PR: [-25.4296, -49.2713],
+            RJ: [-22.9068, -43.1729], RN: [-5.7945, -35.2110], RO: [-8.7611, -63.9039],
+            RR: [2.8235, -60.6753], RS: [-30.0346, -51.2177], SC: [-27.5949, -48.5482],
+            SE: [-10.9162, -37.0677], SP: [-23.5505, -46.6333], TO: [-10.1840, -48.3336]
+        };
+
+        // Cache simples de geocodificação para município
+        const geocodeCache = new Map();
+
+        async function getMunicipioLatLng(uf, municipio) {
+            const key = `${municipio}-${uf}`;
+            if (geocodeCache.has(key)) return geocodeCache.get(key);
+
+            const q = `${municipio}, ${uf}, Brasil`;
+            const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=br&q=${encodeURIComponent(q)}`;
+
+            try {
+                const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                const data = await resp.json();
+                if (Array.isArray(data) && data.length) {
+                    const latlng = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+                    geocodeCache.set(key, latlng);
+                    return latlng;
+                }
+            } catch (e) {
+                console.warn('Falha na geocodificação:', municipio, uf, e);
+            }
+            geocodeCache.set(key, null);
+            return null;
+        }
+
+        async function atualizarMapa(lista) {
+            // limpa marcadores existentes
+            marcadores.forEach(m => mapa.removeLayer(m));
+            marcadores = [];
+
+            const ufSelecionada = document.getElementById("uf").value;
+            const municipioSelecionado = document.getElementById("municipio").value;
+
+            // Caso 1: município selecionado -> 1 pin no município com o total
+            if (municipioSelecionado) {
+                const totalMunicipio = lista.length; // já filtrado por UF (se houver) e município
+                const latlng = await getMunicipioLatLng(ufSelecionada || '', municipioSelecionado);
+                if (latlng) {
+                    const icon = L.divIcon({
+                        className: 'uf-marker',
+                        html: `<div class="uf-badge">${totalMunicipio}</div>`,
+                        iconSize: [36, 36],
+                        iconAnchor: [18, 18]
+                    });
+                    const marcador = L.marker(latlng, { icon }).addTo(mapa);
+                    marcador.bindPopup(`<b>${municipioSelecionado}${ufSelecionada ? ` - ${ufSelecionada}` : ''}</b><br>${totalMunicipio} curso(s)`);
+                    marcadores.push(marcador);
+                    mapa.setView(latlng, 11);
+                }
+                return;
+            }
+
+            // Caso 2: sem município -> agrega por UF
+            const porUF = lista.reduce((acc, item) => {
+                if (!item.uf) return acc;
+                acc[item.uf] = (acc[item.uf] || 0) + 1;
+                return acc;
+            }, {});
+
+            Object.entries(porUF).forEach(([uf, count]) => {
+                const coord = UF_COORDS[uf];
+                if (!coord) return;
+
+                const icon = L.divIcon({
+                    className: 'uf-marker',
+                    html: `<div class="uf-badge">${count}</div>`,
+                    iconSize: [36, 36],
+                    iconAnchor: [18, 18]
+                });
+
+                const marcador = L.marker(coord, { icon }).addTo(mapa);
+                marcador.bindPopup(`<b>${uf}</b><br>${count} curso(s)`);
+                marcadores.push(marcador);
+            });
+
+            // Ajuste de visão:
+            // - Se uma UF selecionada: centraliza no estado com zoom fixo (~6)
+            // - Senão, ajusta pelo conjunto de marcadores
+            if (ufSelecionada && UF_COORDS[ufSelecionada]) {
+                mapa.setView(UF_COORDS[ufSelecionada], 6);
+            } else if (marcadores.length) {
+                const group = L.featureGroup(marcadores);
+                mapa.fitBounds(group.getBounds().pad(0.2));
+            }
+        }
+
+        function atualizarTabela(lista) {
+            let corpo = document.querySelector("#tabela tbody");
+            corpo.innerHTML = "";
+            lista.forEach(item => {
+                let linha = document.createElement("tr");
+                linha.innerHTML = `<td>${item.nome_ies}</td><td>${item.nome_curso}</td><td>${item.modalidade}</td><td>${item.municipio}</td><td>${item.uf}</td>`;
+                corpo.appendChild(linha);
+            });
+        }
+
+        function atualizarFiltros() {
+            let ufSelect = document.getElementById("uf");
+            let municipioSelect = document.getElementById("municipio");
+
+            let ufs = [...new Set(dados.map(d => d.uf).filter(Boolean))].sort();
+            ufSelect.innerHTML = '<option value="">Todos</option>' + ufs.map(uf => `<option value="${uf}">${uf}</option>`).join('');
+
+            // Popular municípios na carga inicial (Todos os municípios)
+            let municipiosIniciais = [...new Set(dados.map(d => d.municipio).filter(Boolean))].sort();
+            municipioSelect.innerHTML = '<option value="">Todos</option>' + municipiosIniciais.map(m => `<option value="${m}">${m}</option>`).join('');
+
+            ufSelect.addEventListener("change", () => {
+                let ufSelecionado = ufSelect.value;
+                let municipios = [...new Set(dados
+                    .filter(d => !ufSelecionado || d.uf === ufSelecionado)
+                    .map(d => d.municipio)
+                    .filter(Boolean))].sort();
+                municipioSelect.innerHTML = '<option value="">Todos</option>' + municipios.map(m => `<option value="${m}">${m}</option>`).join('');
+                aplicarFiltro();
+            });
+
+            municipioSelect.addEventListener("change", aplicarFiltro);
+        }
+
+        async function aplicarFiltro() {
+            let uf = document.getElementById("uf").value;
+            let municipio = document.getElementById("municipio").value;
+
+            let filtrados = dados.filter(d => {
+                return (!uf || d.uf === uf) && (!municipio || d.municipio === municipio);
+            });
+
+            atualizarTabela(filtrados);
+            await atualizarMapa(filtrados);
+        }
+
+        Papa.parse("cursos_desenvolvimento_software.csv", {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                dados = results.data;
+                document.getElementById("loading").style.display = "none";
+                atualizarFiltros();
+                aplicarFiltro();
+            },
+            error: function(err) {
+                console.error("Erro ao carregar CSV:", err);
+            }
+        });
+    </script>
+</body>
+</html>
