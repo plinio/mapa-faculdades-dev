@@ -2,26 +2,39 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Cursos de Desenvolvimento de Software - Brasil</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cursos de Desenvolvimento de Software - Brasil - DevGuia</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; color: #fff; }
+        * {
+            box-sizing: border-box;
+        }
+
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 10px; 
+            color: #fff; 
+            font-size: 14px;
+        }
         
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
         
         .header h1 {
             margin: 0;
             flex: 1;
+            font-size: 1.5rem;
+            min-width: 250px;
         }
         
         .logo-container {
             flex-shrink: 0;
-            margin-left: 20px;
+            margin-left: 10px;
         }
         
         .logo-container img {
@@ -36,34 +49,75 @@
 
         .filters {
             margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 150px;
         }
 
         .filters label {
-            margin-right: 10px;
             font-weight: bold;
+            font-size: 12px;
         }
 
         .filters select {
-            margin-right: 20px;
-            padding: 5px;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 14px;
         }
 
         .message {
-            display: inline-block;
-            margin-left: 20px;
+            margin-top: 10px;
             font-style: italic;
             color: #ccc;
+            font-size: 12px;
+            width: 100%;
         }
 
-        #map { height: 500px; margin-top: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; color: #051937; }
+        #map { 
+            height: 300px; 
+            margin-top: 20px; 
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            min-width: 600px;
+        }
+        
+        th, td { 
+            border: 1px solid #ccc; 
+            padding: 8px; 
+            text-align: left; 
+            font-size: 12px;
+        }
+        
+        th { 
+            background-color: #f2f2f2; 
+            color: #051937; 
+            position: sticky;
+            top: 0;
+        }
 
         .uf-marker .uf-badge {
-            width: 36px;
-            height: 36px;
-            border-radius: 18px;
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
             background: #1e88e5;
             color: #fff;
             border: 2px solid #fff;
@@ -72,11 +126,99 @@
             justify-content: center;
             font-weight: bold;
             box-shadow: 0 0 6px rgba(0,0,0,0.3);
+            font-size: 12px;
         }
 
         .loading {
-            color: #432381;
+            color: #a855f7;
             font-weight: bold;
+        }
+
+        /* Media queries para responsividade */
+        @media (max-width: 768px) {
+            body {
+                margin: 5px;
+                font-size: 12px;
+            }
+
+            .header {
+                flex-direction: column;
+                text-align: center;
+                gap: 10px;
+            }
+
+            .header h1 {
+                font-size: 1.2rem;
+                min-width: auto;
+            }
+
+            .logo-container {
+                margin-left: 0;
+            }
+
+            .logo-container img {
+                height: 80px;
+            }
+
+            .filters {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 15px;
+            }
+
+            .filter-group {
+                min-width: auto;
+                width: 100%;
+            }
+
+            .filters select {
+                width: 100%;
+                padding: 12px;
+                font-size: 16px; /* Evita zoom no iOS */
+            }
+
+            .message {
+                text-align: center;
+                margin-top: 15px;
+            }
+
+            #map {
+                height: 250px;
+                margin-top: 15px;
+            }
+
+            .uf-marker .uf-badge {
+                width: 28px;
+                height: 28px;
+                border-radius: 14px;
+                font-size: 11px;
+            }
+
+            th, td {
+                padding: 6px;
+                font-size: 11px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1rem;
+            }
+
+            .logo-container img {
+                height: 80px;
+            }
+
+            #map {
+                height: 200px;
+            }
+
+            .uf-marker .uf-badge {
+                width: 24px;
+                height: 24px;
+                border-radius: 12px;
+                font-size: 10px;
+            }
         }
     </style>
 </head>
@@ -89,38 +231,44 @@
     </div>
     
     <div class="filters">
-        <label for="uf">Estado (UF):</label>
-        <select id="uf">
-            <option value="">Selecione...</option>
-        </select>
+        <div class="filter-group">
+            <label for="uf">Estado (UF):</label>
+            <select id="uf">
+                <option value="">Selecione...</option>
+            </select>
+        </div>
 
-        <label for="municipio">Município:</label>
-        <select id="municipio">
-            <option value="">Selecione primeiro o estado</option>
-        </select>
+        <div class="filter-group">
+            <label for="municipio">Município:</label>
+            <select id="municipio">
+                <option value="">Selecione primeiro o estado</option>
+            </select>
+        </div>
 
-        <span class="message" id="message">Selecione o Estado e Cidade para ver os cursos</span>
+        <div class="message" id="message">Selecione o Estado e Cidade para ver os cursos</div>
     </div>
 
     <div id="map"></div>
 
-    <table id="tabela" style="display: none;">
-        <thead>
-            <tr>
-                <th>Instituição</th>
-                <th>Curso</th>
-                <th>Modalidade</th>
-                <th>Município</th>
-                <th>UF</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+    <div class="table-container">
+        <table id="tabela" style="display: none;">
+            <thead>
+                <tr>
+                    <th>Instituição</th>
+                    <th>Curso</th>
+                    <th>Modalidade</th>
+                    <th>Município</th>
+                    <th>UF</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script>
-        let dadosCache = new Map(); // Cache dos dados carregados
+        let dadosCache = new Map();
         let mapa = L.map('map').setView([-14.2350, -51.9253], 4);
         let marcadores = [];
 
@@ -128,7 +276,6 @@
             attribution: '© OpenStreetMap contributors'
         }).addTo(mapa);
 
-        // Lista de UFs para popular o select
         const UFS = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
 
         const UF_COORDS = {
@@ -206,8 +353,8 @@
                     const icon = L.divIcon({
                         className: 'uf-marker',
                         html: `<div class="uf-badge">${totalMunicipio}</div>`,
-                        iconSize: [36, 36],
-                        iconAnchor: [18, 18]
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 16]
                     });
                     const marcador = L.marker(latlng, { icon }).addTo(mapa);
                     marcador.bindPopup(`<b>${municipioSelecionado} - ${ufSelecionada}</b><br>${totalMunicipio} curso(s)`);
@@ -221,8 +368,8 @@
                     const icon = L.divIcon({
                         className: 'uf-marker',
                         html: `<div class="uf-badge">${totalUF}</div>`,
-                        iconSize: [36, 36],
-                        iconAnchor: [18, 18]
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 16]
                     });
                     const marcador = L.marker(coord, { icon }).addTo(mapa);
                     marcador.bindPopup(`<b>${ufSelecionada}</b><br>${totalUF} curso(s)`);
@@ -250,13 +397,11 @@
             tabela.style.display = "table";
         }
 
-        // Inicializar página
         function init() {
             const ufSelect = document.getElementById("uf");
             const municipioSelect = document.getElementById("municipio");
             const messageEl = document.getElementById("message");
 
-            // Popular UFs
             UFS.forEach(uf => {
                 const option = document.createElement("option");
                 option.value = uf;
@@ -315,7 +460,6 @@
             });
         }
 
-        // Inicializar quando a página carregar
         init();
     </script>
 </body>
